@@ -1,0 +1,83 @@
+> library(shiny)
+> library(ggplot2)
+> 
+> # Define UI
+> ui <- fluidPage(
++     titlePanel("Genetic Drift Simulator with Multiple Alleles"),
++     sidebarLayout(
++         sidebarPanel(
++             numericInput("popSize", "Population Size:", value = 100, min = 10, max = 1000),
++             numericInput("numGenerations", "Number of Generations:", value = 100, min = 10, max = 500),
++             numericInput("numAlleles", "Number of Alleles:", value = 2, min = 2, max = 10),
++             uiOutput("alleleFreqInputs"),
++             actionButton("simulate", "Simulate")
++         ),
++         mainPanel(
++             plotOutput("driftPlot")
++         )
++     )
++ )
+> 
+> # Define server logic
+> server <- function(input, output, session) {
++     
++     # Generate UI for allele frequency inputs
++     output$alleleFreqInputs <- renderUI({
++         num_alleles <- input$numAlleles
++         lapply(1:num_alleles, function(i) {
++             numericInput(paste0("freq", i), paste("Frequency of Allele", i, ":"), value = 1/num_alleles, min = 0, max = 1)
++         })
++     })
++     
++     observeEvent(input$simulate, {
++         # Collect allele frequencies
++         num_alleles <- input$numAlleles
++         allele_freqs <- sapply(1:num_alleles, function(i) input[[paste0("freq", i)]])
++         
++         # Function to simulate genetic drift
++         simulate_drift <- function(pop_size, num_generations, allele_freqs) {
++             num_alleles <- length(allele_freqs)
++             drift_data <- list()
++             
++             for (allele in 1:num_alleles) {
++                 freq <- numeric(num_generations)
++                 freq[1] <- allele_freqs[allele]
++                 
++                 for (i in 2:num_generations) {
++                     # Simulate the next generation for this allele
++                     allele_count <- rbinom(1, pop_size, freq[i-1])
++                     freq[i] <- allele_count / pop_size
++                 }
++                 
++                 drift_data[[paste0("Allele_", allele)]] <- freq
++             }
++             
++             data.frame(Generation = 1:num_generations, as.data.frame(drift_data))
++         }
++         
++         # Get simulation results
++         drift_data <- simulate_drift(input$popSize, input$numGenerations, allele_freqs)
++         
++         # Reshape data from wide to long format manually
++         drift_data_long <- data.frame(Generation = drift_data$Generation)
++         for (col in names(drift_data)[-1]) {
++             drift_data_long[[col]] <- drift_data[[col]]
++         }
++         drift_data_long <- stack(drift_data_long, select = -Generation)
++         names(drift_data_long) <- c("Frequency", "Allele")
++         drift_data_long$Generation <- rep(drift_data$Generation, times = ncol(drift_data) - 1)
++         
++         # Plot the results
++         output$driftPlot <- renderPlot({
++             ggplot(drift_data_long, aes(x = Generation, y = Frequency, color = Allele)) +
++                 geom_line() +
++                 labs(title = "Genetic Drift Over Time",
++                      x = "Generation",
++                      y = "Allele Frequency") +
++                 theme_minimal()
++         })
++     })
++ }
+> 
+> # Run the application 
+> shinyApp(ui = ui, server = server)
