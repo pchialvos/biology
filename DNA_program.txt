@@ -1,0 +1,120 @@
+library(shiny)
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("DNA Transcription and Translation Tool for BIO1201"),
+  
+sidebarLayout(
+    sidebarPanel(
+      textInput("dna_seq", "Enter DNA Sequence (5' to 3'):", value = "ATGCGT"),
+      actionButton("transcribe", "Transcribe DNA to mRNA"),
+      actionButton("translate", "Translate mRNA to Protein"),
+      
+    ),
+    
+    mainPanel(
+      h4("OUTPUT"),
+      verbatimTextOutput("mRNA_seq"),
+	  verbatimTextOutput("protein_seq"),
+	  uiOutput("notes")  # Use uiOutput for conditional rendering
+    )
+  ))
+
+# Define server logic
+server <- function(input, output, session) {
+  
+  observeEvent(input$transcribe, {
+    dna_seq <- input$dna_seq
+    if (nchar(dna_seq) == 0) return(NULL)
+    
+    # Simple transcription function (replace T with U)
+    mRNA_seq <- gsub("T", "U", dna_seq)
+    
+    output$mRNA_seq <- renderText({
+      paste("mRNA Sequence:", mRNA_seq)
+    })
+  })
+  
+  observeEvent(input$translate, {
+    mRNA_seq <- gsub("T", "U", input$dna_seq)  # Transcribe if not done
+    if (nchar(mRNA_seq) == 0) return(NULL)
+    
+    # Codon to amino acid translation table
+    codon_table <- c(
+      "AUG" = "Met", 
+	  "UUU" = "Phe", "UUC" = "Phe", 
+	  "UUA" = "Leu", "UUG" = "Leu", "CUU" = "Leu", "CUC" = "Leu","CUA" = "Leu","CUG" = "Leu",
+      "UCU" = "Ser", "UCC" = "Ser", "UCA" = "Ser", "UCG" = "Ser", 
+	  "UAU" = "Tyr","UAC" = "Tyr", 
+	  "UGU" = "Cys", "UGC" = "Cys", 
+	  "UGG" = "Trp",
+      "CCA" = "Pro", "CCC" = "Pro", "CCG" = "Pro","CCA" = "Pro",
+	  "CAU" = "His", "CAC" = "His",
+	  "CAA" = "Gln", "CAG" = "Gln", 
+	  "CGA" = "Arg", "CGC" = "Arg","CGG" = "Arg", "CGU" = "Arg", "AGA" = "Arg", "ACG" = "Arg",
+	  "GUU" = "Val", "GUC" = "Val","GUA" = "Val", "GUG" = "Val",
+	  "GCU" = "Ala", "GCC" = "Ala", "GCA" = "Ala", "GCG" = "Ala",
+	  "GAU" = "Asp", "GAC" = "Asp",
+	  "GAA" = "Glu", "GAG" = "Glu",
+	  "GGU" = "Gly", "GGC" = "Gly", "GGA" = "Gly", "GGG" = "Gly",
+	  "UGA" = "Stop", "UAA" = "Stop", "UAG" = "Stop"
+    )
+    
+    translate_codon <- function(codon) {
+      if (codon %in% names(codon_table)) {
+        return(codon_table[codon])
+      } else {
+        return(NA)  # Return NA for unknown codons
+      }
+    }
+    
+	# Initialize flags
+    stop_found <- FALSE
+	
+    # Ensure the sequence length is a multiple of 3
+    mRNA_seq <- gsub("T", "U", input$dna_seq)
+    protein_seq <- c()
+    
+    for (i in seq(1, nchar(mRNA_seq) - 2, by = 3)) {
+      codon <- substr(mRNA_seq, i, i + 2)
+      amino_acid <- translate_codon(codon)
+      
+      if (is.na(amino_acid)) {
+        next  # Skip unknown codons
+      }
+      
+      if (amino_acid == "Stop") {
+        stop_found <- TRUE
+        break  # Stop the translation process if "Stop" codon is encountered
+      }
+      
+      protein_seq <- c(protein_seq, amino_acid)
+	  uiOutput("notes")  # Use uiOutput for conditional rendering
+    }
+    
+    # Add hyphens between amino acids
+    protein_seq_hyphen <- paste(protein_seq, collapse = "-")
+    
+    output$protein_seq <- renderText({
+      if (length(protein_seq) == 0) {
+        return("Protein Sequence: No valid protein sequence")
+      } else {
+        paste("Protein Sequence:", protein_seq_hyphen)
+      }
+    })
+	# Notes section
+    output$notes <- renderUI({
+      if (stop_found) {
+        tagList(
+          h4("NOTE:"),
+          p("A STOP codon was encountered in the sequence.")
+        )
+      } else {
+        NULL  # Hide the notes section if no stop codon is found
+      }
+    })
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
