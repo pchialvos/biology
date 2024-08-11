@@ -1,1 +1,2 @@
-Assortment of programs for introductory biology students
+Assortment of programs for introductory biology students.
+Intended for educational purposes only.
